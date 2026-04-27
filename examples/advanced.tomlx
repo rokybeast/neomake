@@ -1,0 +1,27 @@
+# A neomake build file using TOMLX features.
+#
+# Demonstrated features:
+#   - Top-level variables (`$profile`, `$features`)
+#   - Built-in functions (`env`, `glob`)
+#   - Value-level conditionals (`if ... { ... } else { ... }`)
+#   - String interpolation (`${profile}`)
+#   - String concatenation with `+`
+
+$profile = env("NEOMAKE_PROFILE", "debug")
+$sources = glob("src/**/*.rs")
+
+[tasks.lint]
+command = "cargo clippy --all-targets -- -D warnings"
+inputs  = ${sources}
+
+[tasks.build]
+command = "cargo build" + if ${profile} == "release" { " --release" } else { "" }
+deps    = ["lint"]
+inputs  = ${sources}
+outputs = ["target/${profile}/neomake"]
+# Inline tables cannot (yet) reference TOMLX expressions, so env is plain TOML:
+env     = { RUST_LOG = "info" }
+
+[tasks.test]
+command = if ${profile} == "release" { "cargo test --release" } else { "cargo test" }
+deps    = ["build"]

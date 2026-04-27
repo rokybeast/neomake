@@ -1,0 +1,18 @@
+[package]
+name = "neomake-tomlx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "TOMLX: a progressive-enhancement superset of TOML with variables, conditionals, and functions."
+
+[dependencies]
+toml = { workspace = true }
+serde = { workspace = true }
+globset = { workspace = true }
+walkdir = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+pretty_assertions = { workspace = true }

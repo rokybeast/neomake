@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = ["neomake", "neomake-core", "neomake-tomlx"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+repository = "https://github.com/ofekb/neomake"
+readme = "README.md"
+
+[workspace.dependencies]
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "process",
+    "macros",
+    "sync",
+    "fs",
+    "io-util",
+    "time",
+] }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+globset = "0.4"
+walkdir = "2"
+thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+num_cpus = "1"
+
+# Workspace-local crates
+neomake-core = { path = "neomake-core", version = "0.1.0" }
+neomake-tomlx = { path = "neomake-tomlx", version = "0.1.0" }
+
+# Dev
+tempfile = "3"
+pretty_assertions = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
