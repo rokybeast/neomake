@@ -13,7 +13,30 @@ fn neomake_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_neomake"))
 }
 
+/// Build a `neomake.toml` whose three tasks (a, b, c) work under
+/// either `sh` (Unix default) or PowerShell (Windows default).
+///
+/// On Windows we use `Set-Content -Encoding ascii` and `Get-Content`
+/// because PowerShell 5.1's `>` redirection writes UTF-16 + BOM, which
+/// would change file contents and defeat the cache verification.
 fn write_basic_config(dir: &std::path::Path) {
+    #[cfg(windows)]
+    let cfg = r#"
+[tasks.a]
+command = "Set-Content -Encoding ascii -Path a.txt -Value 'hello-a'"
+outputs = ["a.txt"]
+
+[tasks.b]
+command = "Set-Content -Encoding ascii -Path b.txt -Value 'hello-b'"
+outputs = ["b.txt"]
+
+[tasks.c]
+command = "Get-Content a.txt, b.txt | Set-Content -Encoding ascii -Path c.txt"
+deps    = ["a", "b"]
+inputs  = ["a.txt", "b.txt"]
+outputs = ["c.txt"]
+"#;
+    #[cfg(not(windows))]
     let cfg = r#"
 [tasks.a]
 command = "echo hello-a > a.txt"
@@ -97,6 +120,15 @@ fn list_command_prints_topo_order() {
 #[test]
 fn tomlx_variables_work_end_to_end() {
     let tmp = tempfile::tempdir().unwrap();
+    #[cfg(windows)]
+    let cfg = r#"
+$greeting = "hi"
+
+[tasks.t]
+command = "Set-Content -Encoding ascii -Path out.txt -Value '${greeting}'"
+outputs = ["out.txt"]
+"#;
+    #[cfg(not(windows))]
     let cfg = r#"
 $greeting = "hi"
 
@@ -124,13 +156,16 @@ outputs = ["out.txt"]
 #[test]
 fn cycle_is_reported_with_clear_message() {
     let tmp = tempfile::tempdir().unwrap();
+    // Cycle detection runs before any command is invoked, so the
+    // command string only has to parse as a TOML value. `echo` exists
+    // (or is aliased to `Write-Output`) on every supported platform.
     let cfg = r#"
 [tasks.a]
-command = "true"
+command = "echo a"
 deps = ["b"]
 
 [tasks.b]
-command = "true"
+command = "echo b"
 deps = ["a"]
 "#;
     fs::write(tmp.path().join("neomake.toml"), cfg).unwrap();
@@ -151,6 +186,16 @@ deps = ["a"]
 #[test]
 fn failing_task_skips_dependents() {
     let tmp = tempfile::tempdir().unwrap();
+    #[cfg(windows)]
+    let cfg = r#"
+[tasks.bad]
+command = "exit 1"
+
+[tasks.dep]
+command = "echo should-not-run"
+deps = ["bad"]
+"#;
+    #[cfg(not(windows))]
     let cfg = r#"
 [tasks.bad]
 command = "false"

@@ -42,6 +42,35 @@ cargo install --path neomake
 A `cargo build --release` at the workspace root produces
 `target/release/neomake`.
 
+### Platform support
+
+`neomake` runs on Linux, macOS, and Windows. Task commands are passed
+to a shell whose choice depends on the host:
+
+- **Unix-likes** — `sh -c <command>`.
+- **Windows** — `pwsh -NoProfile -NoLogo -Command <command>` if
+  PowerShell 7+ is on `PATH`, otherwise `powershell.exe` (Windows
+  PowerShell 5.1), otherwise `cmd.exe /S /C` as a last-resort fallback.
+
+Set `NEOMAKE_SHELL` to override; its value is whitespace-tokenized as
+argv and the user's command is appended as the final argument:
+
+```bash
+NEOMAKE_SHELL="bash -c"          neomake run     # force bash
+NEOMAKE_SHELL="cmd /S /C"        neomake run     # force cmd.exe on Windows
+```
+
+> **Cache compatibility.** This release bumps the cache format to
+> `neomake-cache-v2` so input paths are hashed with portable `/`
+> separators. Existing entries written by an older neomake will miss
+> on first run after upgrading; use `neomake cache clean` if you want
+> to reclaim the disk space immediately.
+
+> **Windows PowerShell 5.1 redirection.** `>` writes UTF-16 + BOM by
+> default in 5.1 (this is fixed in pwsh / PowerShell 7+). For
+> deterministic byte-level output, prefer `pwsh` or use
+> `Set-Content -Encoding ascii` / `-Encoding utf8NoBOM` instead.
+
 ## Quickstart
 
 Create `neomake.toml`:
@@ -137,15 +166,7 @@ a complete example.
   `Semaphore` to cap concurrent shell commands. Cache hits bypass the
   semaphore entirely.
 
-## Scope
-
-**In scope**: TOML / TOMLX config parsing, DAG-based parallel
-execution, content-addressable local caching, CLI commands listed
-above, cycle detection with clear errors.
-
-**Out of scope for this version**: remote/distributed caching, plugin
-systems, watch mode, GUI/TUI, Windows (Linux/macOS only).
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0.
+MIT

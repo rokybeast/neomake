@@ -45,7 +45,12 @@ use crate::error::CacheError;
 use crate::task::Task;
 
 /// Cache-layout version. Bump when the on-disk format changes.
-pub const CACHE_FORMAT_VERSION: &str = "neomake-cache-v1";
+///
+/// **v2** normalizes path separators in the hashed input list to `/` so
+/// the same project produces identical cache keys on Windows and on
+/// POSIX hosts. Existing v1 entries from previous neomake builds will
+/// no longer match and can be removed via `neomake cache clean`.
+pub const CACHE_FORMAT_VERSION: &str = "neomake-cache-v2";
 
 /// Content-addressable cache rooted at `<project>/.neomake/cache/`.
 #[derive(Debug, Clone)]
@@ -107,7 +112,7 @@ impl Cache {
         let inputs = expand_globs(&self.root, &task.inputs)?;
         for (rel, abs) in &inputs {
             let content_hash = hash_file(abs)?;
-            hasher.update(rel.to_string_lossy().as_bytes());
+            hasher.update(normalize_rel(rel).as_bytes());
             hasher.update(b":");
             hasher.update(content_hash.as_bytes());
             hasher.update(b"\n");
@@ -162,7 +167,7 @@ impl Cache {
                 })?
                 .len();
             records.push(OutputRecord {
-                path: rel.to_string_lossy().into_owned(),
+                path: normalize_rel(&rel),
                 sha256,
                 size,
             });
@@ -342,11 +347,26 @@ fn expand_globs(root: &Path, patterns: &[String]) -> Result<Vec<(PathBuf, PathBu
         if rel.starts_with(".neomake") {
             continue;
         }
-        if set.is_match(&rel) {
+        // Globset patterns use `/` separators; on Windows, `WalkDir`
+        // produces `\\`-separated relative paths. Match against a
+        // normalized form so portable patterns work on every host.
+        let rel_match = normalize_rel(&rel);
+        if set.is_match(&rel_match) {
             found.insert(rel.clone(), entry.path().to_path_buf());
         }
     }
     Ok(found.into_iter().collect())
+}
+
+/// Render a relative path using `/` as the separator regardless of host
+/// OS. Used to keep glob matching and cache keys portable.
+fn normalize_rel(rel: &Path) -> String {
+    let s = rel.to_string_lossy();
+    if std::path::MAIN_SEPARATOR == '/' {
+        s.into_owned()
+    } else {
+        s.replace(std::path::MAIN_SEPARATOR, "/")
+    }
 }
 
 fn now_unix() -> u64 {

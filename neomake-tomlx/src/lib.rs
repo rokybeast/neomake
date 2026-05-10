@@ -34,6 +34,7 @@ pub mod error;
 pub mod evaluator;
 pub mod lexer;
 pub mod parser;
+mod shell;
 
 pub use error::TomlxError;
 pub use evaluator::{load, load_str, render_toml_value};

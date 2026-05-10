@@ -18,6 +18,9 @@ walkdir = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+which = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 pretty_assertions = { workspace = true }

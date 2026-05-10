@@ -140,9 +140,15 @@ The cache directory (`.neomake/`) is never included.
 
 ### `exec(command)`
 
-Runs `command` via `sh -c` with the project root as the working
-directory, captures its stdout, and returns it as a trimmed string. A
-non-zero exit status is a hard error.
+Runs `command` via the platform's default shell with the project root
+as the working directory, captures its stdout, and returns it as a
+trimmed string. A non-zero exit status is a hard error.
+
+The shell is `sh -c` on Unix-likes; on Windows it is `pwsh` (preferred,
+UTF-8 by default), then `powershell.exe`, then `cmd.exe /S /C` as a
+fallback. Override with the `NEOMAKE_SHELL` environment variable
+(whitespace-tokenized argv; the command string is appended as the
+final argument).
 
 > **Cache caveat.** `exec()` is not re-evaluated as part of a task's
 > cache key; its value is captured at load time. If you need command

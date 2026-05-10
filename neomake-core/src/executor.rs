@@ -35,6 +35,7 @@ use tokio::task::JoinSet;
 use crate::cache::Cache;
 use crate::dag::Dag;
 use crate::error::ExecError;
+use crate::shell;
 use crate::task::Task;
 
 /// Status of a single task after the run completes.
@@ -477,8 +478,9 @@ async fn run_single(
 
 async fn run_command(task: &Task, cwd: &Path, reporter: &Reporter) -> Result<i32, std::io::Error> {
     use tokio::process::Command;
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c")
+    let invocation = shell::resolve();
+    let mut cmd = Command::new(&invocation.program);
+    cmd.args(&invocation.args)
         .arg(&task.command)
         .current_dir(cwd)
         .stdout(Stdio::piped())
@@ -536,6 +538,41 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
 
+    // Cross-platform test command helpers. The default shell is `sh -c`
+    // on Unix and PowerShell on Windows, so test commands must be
+    // expressed in whichever dialect matches the host.
+
+    #[cfg(windows)]
+    fn sleep_cmd(ms: u64) -> String {
+        format!("Start-Sleep -Milliseconds {ms}")
+    }
+    #[cfg(not(windows))]
+    fn sleep_cmd(ms: u64) -> String {
+        format!("sleep {}", ms as f64 / 1000.0)
+    }
+
+    #[cfg(windows)]
+    fn fail_cmd() -> String {
+        "exit 1".to_string()
+    }
+    #[cfg(not(windows))]
+    fn fail_cmd() -> String {
+        "false".to_string()
+    }
+
+    /// Write `body` to `path` (relative to the task's cwd) using a
+    /// shell-native command. PowerShell 5.1's `>` redirects emit
+    /// UTF-16 + BOM; we use `Set-Content -Encoding ascii` instead so
+    /// the bytes match what `echo > file` produces under `sh`.
+    #[cfg(windows)]
+    fn write_cmd(path: &str, body: &str) -> String {
+        format!("Set-Content -Encoding ascii -Path '{path}' -Value '{body}'")
+    }
+    #[cfg(not(windows))]
+    fn write_cmd(path: &str, body: &str) -> String {
+        format!("echo {body} > {path}")
+    }
+
     fn mk(name: &str, cmd: &str, deps: &[&str]) -> Task {
         Task {
             name: name.into(),
@@ -560,15 +597,22 @@ mod tests {
     async fn runs_independent_tasks_concurrently() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = Cache::open(tmp.path()).unwrap();
-        let tasks = vec![mk("a", "sleep 0.3", &[]), mk("b", "sleep 0.3", &[])];
+        // Use a generous sleep on Windows: PowerShell's startup latency
+        // can dominate a 300ms test, which would falsely flag the run
+        // as serial. The serial-vs-parallel ratio is what matters.
+        let sleep_ms: u64 = if cfg!(windows) { 1500 } else { 300 };
+        let serial_threshold_ms: u64 = sleep_ms * 2 - sleep_ms / 4; // ~1.75x sleep
+        let tasks = vec![
+            mk("a", &sleep_cmd(sleep_ms), &[]),
+            mk("b", &sleep_cmd(sleep_ms), &[]),
+        ];
         let opts = RunOptions::new(tmp.path(), 4);
         let started = Instant::now();
         let report = run(&tasks, &cache, &opts, None).await.unwrap();
         let elapsed = started.elapsed();
         assert!(!report.had_failure());
-        // If run serially this would be >=0.6s; parallel it should be <0.55s.
         assert!(
-            elapsed < Duration::from_millis(550),
+            elapsed < Duration::from_millis(serial_threshold_ms),
             "elapsed={elapsed:?} — tasks appear to have run serially"
         );
     }
@@ -578,7 +622,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = Cache::open(tmp.path()).unwrap();
         let tasks = vec![
-            mk("a", "false", &[]),
+            mk("a", &fail_cmd(), &[]),
             mk("b", "echo should-not-run", &["a"]),
         ];
         let opts = RunOptions::new(tmp.path(), 2);
@@ -592,9 +636,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = Cache::open(tmp.path()).unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
-        let out = tmp.path().join("out.txt");
         // Intentionally write deterministic output so the cache can verify it.
-        let cmd = format!("echo hi > {}", out.display());
+        let cmd = write_cmd("out.txt", "hi");
         let task = Task {
             name: "t".into(),
             command: cmd,

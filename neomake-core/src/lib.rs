@@ -27,6 +27,7 @@ pub mod cache;
 pub mod dag;
 pub mod error;
 pub mod executor;
+pub mod shell;
 pub mod task;
 
 pub use cache::{Cache, CacheEntry, CacheStatus, OutputRecord};
@@ -35,4 +36,5 @@ pub use error::{CacheError, ConfigError, CoreError, DagError, ExecError};
 pub use executor::{
     run, select_tasks, ExecutionEvent, Reporter, RunOptions, RunReport, TaskOutcome, TaskStatus,
 };
+pub use shell::{resolve as resolve_shell, ShellInvocation};
 pub use task::{project_root_for, Task, TaskSet};

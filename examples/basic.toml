@@ -1,8 +1,10 @@
 # A minimal neomake build file written in plain TOML.
 #
-# The `codegen` task has no dependencies and produces `src/generated.rs`.
-# The `build` task depends on `codegen` and produces the release binary.
-# The `test` task depends on `build` and runs the test suite.
+# Every command here uses `cargo`, which is identical on Linux, macOS,
+# and Windows — so the example runs unmodified under either `sh` or
+# PowerShell. When the host shell needs to be different (for instance
+# to use bash on Windows) set `NEOMAKE_SHELL`, e.g.
+# `NEOMAKE_SHELL="bash -c"` or `NEOMAKE_SHELL="cmd /S /C"`.
 #
 # Run a specific task:
 #   neomake run build
@@ -11,17 +13,15 @@
 #   neomake run
 
 [tasks.codegen]
-command = "mkdir -p src && touch src/generated.rs"
+command = "cargo --version"
 inputs  = ["schema/**/*.proto"]
-outputs = ["src/generated.rs"]
 
 [tasks.build]
-command = "echo building && touch target-out"
+command = "cargo --version"
 deps    = ["codegen"]
 inputs  = ["src/**/*.rs", "Cargo.toml"]
-outputs = ["target-out"]
 env     = { RUST_LOG = "info" }
 
 [tasks.test]
-command = "echo tests pass"
+command = "cargo --version"
 deps    = ["build"]

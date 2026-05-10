@@ -33,6 +33,7 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 num_cpus = "1"
+which = "6"
 
 # Workspace-local crates
 neomake-core = { path = "neomake-core", version = "0.1.0" }

@@ -35,6 +35,7 @@ use walkdir::WalkDir;
 use crate::error::TomlxError;
 use crate::lexer::{tokenize, Span};
 use crate::parser::{parse_expr, BinOp, Expr, StringPart, UnaryOp};
+use crate::shell;
 
 /// Evaluate a TOMLX source string into a fully-materialized [`toml::Value`].
 ///
@@ -561,8 +562,17 @@ fn call_builtin(
                 if rel.starts_with(".neomake") {
                     continue;
                 }
-                if set.is_match(&rel) {
-                    matches.push(rel.to_string_lossy().into_owned());
+                // Globset uses `/`; on Windows, `WalkDir` produces `\\`.
+                // Normalize so portable patterns match on every host and
+                // the returned strings are also portable.
+                let rel_str = if std::path::MAIN_SEPARATOR == '/' {
+                    rel.to_string_lossy().into_owned()
+                } else {
+                    rel.to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/")
+                };
+                if set.is_match(&rel_str) {
+                    matches.push(rel_str);
                 }
             }
             matches.sort();
@@ -578,8 +588,9 @@ fn call_builtin(
                 )));
             }
             let cmd = expect_string(&eval_args[0], "exec() argument", &mk_err)?;
-            let output = Command::new("sh")
-                .arg("-c")
+            let invocation = shell::resolve();
+            let output = Command::new(&invocation.program)
+                .args(&invocation.args)
                 .arg(&cmd)
                 .current_dir(&scope.base_dir)
                 .output()
