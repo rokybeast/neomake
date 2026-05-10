@@ -597,11 +597,17 @@ mod tests {
     async fn runs_independent_tasks_concurrently() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = Cache::open(tmp.path()).unwrap();
-        // Use a generous sleep on Windows: PowerShell's startup latency
-        // can dominate a 300ms test, which would falsely flag the run
-        // as serial. The serial-vs-parallel ratio is what matters.
-        let sleep_ms: u64 = if cfg!(windows) { 1500 } else { 300 };
-        let serial_threshold_ms: u64 = sleep_ms * 2 - sleep_ms / 4; // ~1.75x sleep
+        // PowerShell's per-invocation startup is ~0.5–1s on a fresh CI
+        // runner, so we need (a) a sleep large enough that the signal
+        // dominates spawn noise and (b) a threshold sized as
+        // `sleep + spawn_budget` rather than a tight multiple of the
+        // sleep, so parallel runs sit well under it while serial runs
+        // (which pay startup twice) sit comfortably above.
+        let (sleep_ms, threshold_ms): (u64, u64) = if cfg!(windows) {
+            (2000, 4500)
+        } else {
+            (300, 550)
+        };
         let tasks = vec![
             mk("a", &sleep_cmd(sleep_ms), &[]),
             mk("b", &sleep_cmd(sleep_ms), &[]),
@@ -612,7 +618,7 @@ mod tests {
         let elapsed = started.elapsed();
         assert!(!report.had_failure());
         assert!(
-            elapsed < Duration::from_millis(serial_threshold_ms),
+            elapsed < Duration::from_millis(threshold_ms),
             "elapsed={elapsed:?} — tasks appear to have run serially"
         );
     }
