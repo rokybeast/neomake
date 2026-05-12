@@ -1,0 +1,79 @@
+name: Run neomake (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      neomake-ref:
+        description: Git ref (branch or tag) to install neomake from
+        type: string
+        required: false
+        default: main
+      working-directory:
+        description: Directory to run neomake in (relative to repository root)
+        type: string
+        required: false
+        default: "."
+      config-path:
+        description: Path to neomake config (relative to working-directory unless absolute)
+        type: string
+        required: false
+        default: neomake.toml
+      tasks:
+        description: Space-separated task names (empty runs default leaf set)
+        type: string
+        required: false
+        default: ""
+      concurrency:
+        description: Max parallel tasks (empty uses neomake default)
+        type: string
+        required: false
+        default: ""
+      extra-args:
+        description: Extra arguments passed to neomake before the subcommand (whitespace-separated)
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  neomake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: neomake-install-${{ inputs.neomake-ref }}
+
+      - name: Install neomake
+        run: |
+          cargo install --locked --git https://github.com/sinisterMage/neomake.git --rev "${{ inputs.neomake-ref }}" neomake
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Run neomake
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          NEOMAKE_CONFIG: ${{ inputs.config-path }}
+          NEOMAKE_TASKS: ${{ inputs.tasks }}
+          NEOMAKE_CONCURRENCY: ${{ inputs.concurrency }}
+          NEOMAKE_EXTRA_ARGS: ${{ inputs.extra-args }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [[ -n "${NEOMAKE_EXTRA_ARGS:-}" ]]; then
+            read -r -a extra <<< "$NEOMAKE_EXTRA_ARGS"
+          fi
+          tasks=()
+          if [[ -n "${NEOMAKE_TASKS:-}" ]]; then
+            read -r -a tasks <<< "$NEOMAKE_TASKS"
+          fi
+          global=(--config "$NEOMAKE_CONFIG")
+          if [[ -n "${NEOMAKE_CONCURRENCY:-}" ]]; then
+            global+=(--concurrency "$NEOMAKE_CONCURRENCY")
+          fi
+          neomake "${extra[@]}" "${global[@]}" run "${tasks[@]}"

@@ -42,6 +42,33 @@ cargo install --path neomake
 A `cargo build --release` at the workspace root produces
 `target/release/neomake`.
 
+### Arch Linux (AUR)
+
+`neomake` is available from the [AUR](https://wiki.archlinux.org/title/Arch_User_Repository). With [yay](https://github.com/Jguer/yay) or [paru](https://github.com/Morganamilo/paru):
+
+```bash
+yay -S neomake
+# or
+paru -S neomake
+```
+
+### GitHub Actions (reusable workflow)
+
+Other repositories can call the reusable workflow to install `neomake`
+from this repo and run it against the caller’s checkout:
+
+```yaml
+jobs:
+  ci:
+    uses: sinisterMage/neomake/.github/workflows/reusable-neomake.yml@main
+    with:
+      neomake-ref: main
+      config-path: neomake.toml
+```
+
+See [`.github/workflows/reusable-neomake.yml`](.github/workflows/reusable-neomake.yml)
+for all inputs (`working-directory`, `tasks`, `concurrency`, `extra-args`, …).
+
 ### Platform support
 
 `neomake` runs on Linux, macOS, and Windows. Task commands are passed
